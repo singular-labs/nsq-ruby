@@ -278,14 +278,38 @@ describe Nsq::Producer do
           @producer.write('die')
         }.to raise_error(RuntimeError, /No connections available/)
       end
+
     end
 
-    describe '#write_to_bad_topic' do
-      it 'should raise an exception when providing a bad topic name' do
-        bad_topic_name = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-        expect { @producer.write_to_topic(bad_topic_name) }.to raise_error(Exception)
-      end
+  end
+  #------------------------------------------------------------------------#
+  context 'connecting to local nsqd docker' do
+
+    before do
+      @producer = new_local_producer
+
+      # wait for it to connect to all nsqds
+      wait_for{ @producer.connections.length == 1 }
     end
+
+    after do
+      @producer.terminate if @producer
+    end
+
+    describe '#write_to_topic' do
+      it 'should write messages to local nsq' do
+        @producer.write('Gal and Ezequiel')
+      end
+
+    end
+
+    # describe '#write_to_bad_topic' do
+    #   it 'should raise an exception when providing a bad topic name' do
+    #     bad_topic_name = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    #     expect { @producer.write_to_topic(bad_topic_name) }.to raise_error(Exception)
+    #   end
+    #
+    # end
 
   end
 

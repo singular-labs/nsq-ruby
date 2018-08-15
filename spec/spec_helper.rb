@@ -80,6 +80,13 @@ def new_lookupd_producer(opts = {})
   }.merge(opts))
 end
 
+def new_local_producer
+  Nsq::Producer.new(
+      nsqlookupd: ['127.0.0.1:4161'],
+      topic: TOPIC
+  )
+end
+
 # This is for certain spots where we're testing connections going up and down.
 # Don't want these tests to take forever to run!
 def set_speedy_connection_timeouts!
