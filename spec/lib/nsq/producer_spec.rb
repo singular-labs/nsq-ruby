@@ -282,7 +282,7 @@ describe Nsq::Producer do
     end
 
   end
-  #------------------------------------------------------------------------#
+  #-----------------------------------Tests using existing nsqd------------------------------------#
   context 'connecting to local nsqd docker' do
 
     before do
@@ -296,20 +296,20 @@ describe Nsq::Producer do
       @producer.terminate if @producer
     end
 
-    describe '#write_to_topic' do
+    describe '#write_to_topic', :type => 'docker' do
       it 'should write messages to local nsq' do
         @producer.write('Gal and Ezequiel')
       end
 
     end
 
-    # describe '#write_to_bad_topic' do
-    #   it 'should raise an exception when providing a bad topic name' do
-    #     bad_topic_name = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-    #     expect { @producer.write_to_topic(bad_topic_name) }.to raise_error(Exception)
-    #   end
-    #
-    # end
+    describe '#write_to_bad_topic', :type => 'docker' do
+      it 'should raise an exception when providing a bad topic name' do
+        bad_topic_name = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        expect { @producer.write_to_topic(bad_topic_name, 'asdasdasd') }.to raise_error(Exception)
+      end
+
+    end
 
   end
 
