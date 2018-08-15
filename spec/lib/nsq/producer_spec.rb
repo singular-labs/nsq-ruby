@@ -280,6 +280,13 @@ describe Nsq::Producer do
       end
     end
 
+    describe '#write_to_bad_topic' do
+      it 'should raise an exception when providing a bad topic name' do
+        bad_topic_name = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        expect { @producer.write_to_topic(bad_topic_name) }.to raise_error(Exception)
+      end
+    end
+
   end
 
 end
