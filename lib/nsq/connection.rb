@@ -111,7 +111,8 @@ module Nsq
 
 
     def pub(topic, message)
-      write ["PUB #{topic}\n", message.bytesize, message].pack('a*l>a*')
+      write(["PUB #{topic}\n", message.bytesize, message].pack('a*l>a*'), true)
+
     end
 
     def dpub(topic, delay_in_ms, message)
@@ -123,7 +124,7 @@ module Nsq
         [message.bytesize, message].pack('l>a*')
       end.join
 
-      write ["MPUB #{topic}\n", body.bytesize, messages.size, body].pack('a*l>l>a*')
+      write(["MPUB #{topic}\n", body.bytesize, messages.size, body].pack('a*l>l>a*'), true)
     end
 
 
@@ -148,9 +149,37 @@ module Nsq
       write "NOP\n"
     end
 
-
-    def write(raw)
-      @write_queue.push(raw)
+    # TODO: receive an expected response (type and body)
+    def write(raw, wait_for_response = false)
+      write_to_socket(raw)
+      if wait_for_response
+        debug 'wait_for_response flag is on, waiting for a response on the write...'
+        response = nil
+        (1.0 / 0.03).to_i.times do |i|
+          response = receive_frame
+          if response == nil
+            next
+          end
+          if response.data == RESPONSE_HEARTBEAT
+            debug 'received heartbeat'
+            # TODO: handle heartbeat according to nsqd
+            next
+          end
+          if response.is_a?(Response) || response.is_a?(Message)
+            break
+          elsif response.is_a?(Error)
+            error "received error: #{response.data}"
+            raise "received error: #{response.data}"
+          end
+          sleep(0.03)
+        end
+        if response
+          handle_response(response)
+        else
+          error "got timeout waiting for response"
+          raise "got timeout waiting for response"
+        end
+      end
     end
 
 
@@ -163,18 +192,18 @@ module Nsq
     def identify
       hostname = Socket.gethostname
       metadata = {
-        client_id: hostname,
-        hostname: hostname,
-        feature_negotiation: true,
-        heartbeat_interval: 30_000, # 30 seconds
-        output_buffer: 16_000, # 16kb
-        output_buffer_timeout: 250, # 250ms
-        tls_v1: @tls_v1,
-        snappy: false,
-        deflate: false,
-        sample_rate: 0, # disable sampling
-        user_agent: USER_AGENT,
-        msg_timeout: @msg_timeout
+          client_id: hostname,
+          hostname: hostname,
+          feature_negotiation: true,
+          heartbeat_interval: 30_000, # 30 seconds
+          output_buffer: 16_000, # 16kb
+          output_buffer_timeout: 250, # 250ms
+          tls_v1: @tls_v1,
+          snappy: false,
+          deflate: false,
+          sample_rate: 0, # disable sampling
+          user_agent: USER_AGENT,
+          msg_timeout: @msg_timeout
       }.to_json
       write_to_socket ["IDENTIFY\n", metadata.length, metadata].pack('a*l>a*')
 
@@ -191,13 +220,10 @@ module Nsq
 
 
     def handle_response(frame)
-      if frame.data == RESPONSE_HEARTBEAT
-        debug 'Received heartbeat'
-        nop
-      elsif frame.data == RESPONSE_OK
+      if frame.data == RESPONSE_OK
         debug 'Received OK'
       else
-        die "Received response we don't know how to handle: #{frame.data}"
+        error "Received response we don't know how to handle: #{frame.data}"
       end
     end
 
@@ -214,6 +240,7 @@ module Nsq
 
 
     FRAME_CLASSES = [Response, Error, Message]
+
     def frame_class_for_type(type)
       raise "Bad frame type specified: #{type}" if type > FRAME_CLASSES.length - 1
       [Response, Error, Message][type]
@@ -232,7 +259,7 @@ module Nsq
 
 
     def start_read_loop
-      @read_loop_thread ||= Thread.new{read_loop}
+      @read_loop_thread ||= Thread.new {read_loop}
     end
 
 
@@ -266,7 +293,7 @@ module Nsq
 
 
     def start_write_loop
-      @write_loop_thread ||= Thread.new{write_loop}
+      @write_loop_thread ||= Thread.new {write_loop}
     end
 
 
@@ -298,7 +325,7 @@ module Nsq
 
     # Waits for death of connection
     def start_monitoring_connection
-      @connection_monitor_thread ||= Thread.new{monitor_connection}
+      @connection_monitor_thread ||= Thread.new {monitor_connection}
       @connection_monitor_thread.abort_on_exception = true
     end
 
@@ -344,8 +371,8 @@ module Nsq
       identify
       upgrade_to_ssl_socket if @tls_v1
 
-      start_read_loop
-      start_write_loop
+      # start_read_loop
+      # start_write_loop
       @connected = true
 
       # we need to re-subscribe if there's a topic specified
@@ -414,7 +441,7 @@ module Nsq
         return block.call(attempts)
 
       rescue Errno::ECONNREFUSED, Errno::ECONNRESET, Errno::EHOSTUNREACH,
-             Errno::ENETDOWN, Errno::ENETUNREACH, Errno::ETIMEDOUT, Timeout::Error => ex
+          Errno::ENETDOWN, Errno::ENETUNREACH, Errno::ETIMEDOUT, Timeout::Error => ex
 
         raise ex if attempts >= 100
 
